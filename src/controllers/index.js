@@ -3,4 +3,5 @@ module.exports = {
   ApplicationController: require("./applicationController"),
   UploadController: require("./uploadController"),
   PaymentController: require("./paymentController"),
+  NotificationController: require("./notificationController"),
 };

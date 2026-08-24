@@ -3,4 +3,5 @@ module.exports = {
   ApplicationRepository: require("./applicationRepository"),
   AdminUserRepository: require("./adminUserRepository"),
   PaymentRepository: require("./paymentRepository"),
+  NotificationRepository: require("./notificationRepository"),
 };

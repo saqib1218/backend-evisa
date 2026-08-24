@@ -3,6 +3,7 @@ const { v4: uuidv4 } = require("uuid");
 const EmailService = require("./emailService");
 const { applicationReceived, applicationStatusUpdate } = require("./emailTemplates");
 const config = require("../config");
+const NotificationService = require("./notificationService");
 
 function generateApplicantId() {
   const num = Math.floor(10000 + Math.random() * 90000);
@@ -57,6 +58,21 @@ const ApplicationService = {
       }
     } catch (emailErr) {
       console.error("Failed to send application confirmation email:", emailErr.message);
+    }
+
+    // Create notification for admin (best-effort)
+    try {
+      const primaryApplicant = applicants[0];
+      const fullName = `${primaryApplicant?.firstName || ""} ${primaryApplicant?.lastName || ""}`.trim() || "Applicant";
+      await NotificationService.create({
+        type: "application_submitted",
+        title: "New Application Received",
+        message: `${fullName} submitted application ${application.applicant_id}`,
+        applicationId: application.id,
+        applicantId: application.applicant_id,
+      });
+    } catch (notifErr) {
+      console.error("Failed to create notification:", notifErr.message);
     }
 
     return application;

@@ -7,6 +7,7 @@ const migrations = [
   require("./004_create_applicants_payments"),
   require("./005_add_phone_to_applicants"),
   require("./006_add_visa_document_url"),
+  require("./007_create_notifications"),
 ];
 
 const run = async () => {
