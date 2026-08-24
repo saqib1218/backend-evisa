@@ -7,12 +7,34 @@ const STATUS_LABELS = {
   rejected: "Rejected",
 };
 
-function applicationReceived({ fullName, applicantId }) {
+function applicationReceived({ fullName, applicantId, referenceNumber, amountPaid, currency }) {
   const issueDate = new Date().toLocaleDateString("en-GB", {
     day: "numeric",
     month: "long",
     year: "numeric",
   });
+
+  const paymentConfirmationBlock = amountPaid
+    ? `
+          <tr>
+            <td style="background-color:#f5f0e8;padding:0 40px 28px 40px;">
+              <div style="width:100%;height:1px;background-color:#b8860b;margin:0 0 20px 0;"></div>
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td width="50%" style="text-align:center;padding:0 8px;">
+                    <p style="font-family:'Source Sans 3',Helvetica,Arial,sans-serif;font-size:9px;font-weight:700;color:#b8860b;letter-spacing:0.2em;text-transform:uppercase;margin:0 0 6px 0;">Payment Confirmed</p>
+                    <p style="font-family:'Source Sans 3',Helvetica,Arial,sans-serif;font-size:15px;font-weight:600;color:#1a1a2e;letter-spacing:0.08em;margin:0;">${(currency || "GBP").toUpperCase()} ${Number(amountPaid).toFixed(2)}</p>
+                  </td>
+                  ${referenceNumber ? `<td style="width:1px;background-color:#b8860b;"></td>
+                  <td width="50%" style="text-align:center;padding:0 8px;">
+                    <p style="font-family:'Source Sans 3',Helvetica,Arial,sans-serif;font-size:9px;font-weight:700;color:#b8860b;letter-spacing:0.2em;text-transform:uppercase;margin:0 0 6px 0;">Reference Number</p>
+                    <p style="font-family:'Source Sans 3',Helvetica,Arial,sans-serif;font-size:15px;font-weight:600;color:#1a1a2e;letter-spacing:0.08em;margin:0;">${referenceNumber}</p>
+                  </td>` : ""}
+                </tr>
+              </table>
+            </td>
+          </tr>`
+    : "";
 
   return `
 <!DOCTYPE html>
@@ -127,7 +149,7 @@ function applicationReceived({ fullName, applicantId }) {
               </table>
             </td>
           </tr>
-
+${paymentConfirmationBlock}
           <!-- Footer -->
           <tr>
             <td style="background-color:#2d76b5;padding:24px 40px;text-align:center;">

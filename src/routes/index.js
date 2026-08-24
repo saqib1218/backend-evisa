@@ -1,5 +1,5 @@
 const express = require("express");
-const { AuthController, ApplicationController, UploadController, PaymentController, NotificationController } = require("../controllers");
+const { AuthController, ApplicationController, UploadController, PaymentController, NotificationController, StripePaymentController } = require("../controllers");
 const { authenticateToken, requireRole, upload, documentUpload } = require("../middleware");
 
 const router = express.Router();
@@ -14,8 +14,14 @@ router.post("/auth/logout", AuthController.logout);
 // Upload routes (authenticated users)
 router.post("/upload/images", authenticateToken, upload.array("images", 10), UploadController.uploadImages);
 
+// Stripe payment routes (public — no application row exists until payment is confirmed)
+router.post("/payments/create-checkout-session", StripePaymentController.createCheckoutSession);
+router.get("/payments/status/:sessionId", StripePaymentController.getPaymentStatus);
+
 // Application routes (public)
-router.post("/applications", ApplicationController.create);
+// NOTE: direct application creation is intentionally NOT exposed here.
+// Applications are only created after a verified Stripe payment via the
+// /payments/create-checkout-session + webhook flow above.
 router.post("/applications/track", ApplicationController.track);
 router.get("/applications/track/:referenceNumber", ApplicationController.getByReference);
 router.get("/applications/applicant/:applicantId", ApplicationController.getByApplicantId);

@@ -4,4 +4,6 @@ module.exports = {
   UploadController: require("./uploadController"),
   PaymentController: require("./paymentController"),
   NotificationController: require("./notificationController"),
+  StripePaymentController: require("./stripePaymentController"),
+  StripeWebhookController: require("./stripeWebhookController"),
 };

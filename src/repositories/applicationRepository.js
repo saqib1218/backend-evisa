@@ -1,17 +1,19 @@
 const db = require("../config/database");
 
 const ApplicationRepository = {
-  async create({ userId, applicantId, referenceNumber, processingType, confirmInfo, privacyNotice, applicants, payment }) {
+  async create({ userId, applicantId, referenceNumber, processingType, confirmInfo, privacyNotice, applicants, payment, stripePayment }) {
     const client = await db.pool.connect();
     try {
       await client.query("BEGIN");
 
+      const isPaid = Boolean(stripePayment);
+
       // 1. Insert application
       const appResult = await client.query(
-        `INSERT INTO applications (user_id, applicant_id, reference_number, status, processing_type, confirm_info, privacy_notice, submit_date)
-         VALUES ($1, $2, $3, 'pending', $4, $5, $6, NOW())
+        `INSERT INTO applications (user_id, applicant_id, reference_number, status, payment_status, processing_type, confirm_info, privacy_notice, submit_date)
+         VALUES ($1, $2, $3, 'pending', $4, $5, $6, $7, NOW())
          RETURNING *`,
-        [userId || null, applicantId, referenceNumber, processingType, confirmInfo, privacyNotice]
+        [userId || null, applicantId, referenceNumber, isPaid, processingType, confirmInfo, privacyNotice]
       );
       const application = appResult.rows[0];
 
@@ -38,13 +40,18 @@ const ApplicationRepository = {
       await client.query(
         `INSERT INTO payments
           (application_id, applicant_count, processing_type, fee_per_applicant,
-           processing_fee_per_applicant, fee_total, processing_total, grand_total, payment_status)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, false)`,
+           processing_fee_per_applicant, fee_total, processing_total, grand_total, payment_status,
+           stripe_checkout_session_id, stripe_payment_intent_id, currency, paid_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
         [
           application.id,
           payment.applicantCount, payment.processingType, payment.feePerApplicant,
           payment.processingFeePerApplicant, payment.feeTotal, payment.processingTotal,
-          payment.grandTotal,
+          payment.grandTotal, isPaid,
+          stripePayment?.checkoutSessionId || null,
+          stripePayment?.paymentIntentId || null,
+          stripePayment?.currency || null,
+          isPaid ? new Date() : null,
         ]
       );
 
@@ -281,6 +288,19 @@ const ApplicationRepository = {
       acceptedCount,
       acceptedPercentage,
     };
+  },
+
+  async markConfirmationEmailSent(applicationId) {
+    const result = await db.query(
+      `UPDATE payments SET confirmation_email_sent = true, updated_at = NOW() WHERE application_id = $1 RETURNING *`,
+      [applicationId]
+    );
+    return result.rows[0];
+  },
+
+  async findPaymentByApplicationId(applicationId) {
+    const result = await db.query(`SELECT * FROM payments WHERE application_id = $1`, [applicationId]);
+    return result.rows[0];
   },
 
   async deleteById(id) {

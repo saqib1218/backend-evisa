@@ -8,6 +8,7 @@ const migrations = [
   require("./005_add_phone_to_applicants"),
   require("./006_add_visa_document_url"),
   require("./007_create_notifications"),
+  require("./008_create_stripe_payments"),
 ];
 
 const run = async () => {

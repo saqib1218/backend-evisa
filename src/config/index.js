@@ -32,4 +32,11 @@ module.exports = {
     replyTo: process.env.SENDGRID_REPLY_TO || "",
   },
   appUrl: process.env.APP_URL || "http://localhost:5000",
+  frontendUrl: process.env.FRONTEND_URL || "http://localhost:3000",
+  stripe: {
+    secretKey: process.env.STRIPE_SECRET_KEY || "",
+    webhookSecret: process.env.STRIPE_WEBHOOK_SECRET || "",
+    publishableKey: process.env.STRIPE_PUBLISHABLE_KEY || "",
+    currency: (process.env.STRIPE_CURRENCY || "gbp").toLowerCase(),
+  },
 };

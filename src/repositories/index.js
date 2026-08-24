@@ -4,4 +4,6 @@ module.exports = {
   AdminUserRepository: require("./adminUserRepository"),
   PaymentRepository: require("./paymentRepository"),
   NotificationRepository: require("./notificationRepository"),
+  PendingApplicationRepository: require("./pendingApplicationRepository"),
+  StripeWebhookEventRepository: require("./stripeWebhookEventRepository"),
 };
