@@ -1,5 +1,8 @@
 const { ApplicationRepository } = require("../repositories");
 const { v4: uuidv4 } = require("uuid");
+const EmailService = require("./emailService");
+const { applicationReceived, applicationStatusUpdate } = require("./emailTemplates");
+const config = require("../config");
 
 function generateApplicantId() {
   const num = Math.floor(10000 + Math.random() * 90000);
@@ -26,7 +29,7 @@ const ApplicationService = {
 
     const referenceNumber = generateReferenceNumber();
 
-    return ApplicationRepository.create({
+    const application = await ApplicationRepository.create({
       userId,
       applicantId,
       referenceNumber,
@@ -36,6 +39,27 @@ const ApplicationService = {
       applicants,
       payment,
     });
+
+    // Send confirmation email (best-effort, must not fail the request)
+    try {
+      const primaryApplicant = applicants[0];
+      if (primaryApplicant?.email) {
+        const fullName = `${primaryApplicant.firstName || ""} ${primaryApplicant.lastName || ""}`.trim() || "Applicant";
+        const html = applicationReceived({
+          fullName,
+          applicantId: application.applicant_id,
+        });
+        await EmailService.sendEmail({
+          to: primaryApplicant.email,
+          subject: "eVisa ETA - Application Received",
+          html,
+        });
+      }
+    } catch (emailErr) {
+      console.error("Failed to send application confirmation email:", emailErr.message);
+    }
+
+    return application;
   },
 
   async getByReferenceNumber(referenceNumber) {
@@ -105,7 +129,35 @@ const ApplicationService = {
     if (!VALID_STATUSES.includes(status)) {
       throw { status: 400, message: `Invalid status. Must be one of: ${VALID_STATUSES.join(", ")}` };
     }
-    return ApplicationRepository.updateOutcome(id, { status, adminId, notes, visaDocumentUrl });
+    const updatedApplication = await ApplicationRepository.updateOutcome(id, { status, adminId, notes, visaDocumentUrl });
+
+    // Send status update email (best-effort, must not fail the request)
+    try {
+      const details = await ApplicationRepository.findByIdWithDetails(id);
+      const primaryApplicant = details?.applicants?.[0];
+      if (primaryApplicant?.email) {
+        const fullName = `${primaryApplicant.first_name || ""} ${primaryApplicant.last_name || ""}`.trim() || "Applicant";
+        const imageUrl = updatedApplication.visa_document_url
+          ? `${config.appUrl}${updatedApplication.visa_document_url}`
+          : null;
+        const html = applicationStatusUpdate({
+          fullName,
+          applicantId: updatedApplication.applicant_id,
+          status,
+          notes: notes || null,
+          imageUrl,
+        });
+        await EmailService.sendEmail({
+          to: primaryApplicant.email,
+          subject: `eVisa ETA - Application ${status.charAt(0).toUpperCase() + status.slice(1)}`,
+          html,
+        });
+      }
+    } catch (emailErr) {
+      console.error("Failed to send application status update email:", emailErr.message);
+    }
+
+    return updatedApplication;
   },
 
   async updatePaymentStatus(applicationId, { paymentStatus, transactionId }) {

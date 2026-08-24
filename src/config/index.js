@@ -26,4 +26,10 @@ module.exports = {
     secure: process.env.NODE_ENV === "production",
     sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
   },
+  sendgrid: {
+    apiKey: process.env.SENDGRID_API_KEY || "",
+    fromEmail: process.env.SENDGRID_FROM_EMAIL || "",
+    replyTo: process.env.SENDGRID_REPLY_TO || "",
+  },
+  appUrl: process.env.APP_URL || "http://localhost:5000",
 };
