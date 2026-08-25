@@ -1,5 +1,5 @@
 const express = require("express");
-const { AuthController, ApplicationController, UploadController, PaymentController, NotificationController, StripePaymentController } = require("../controllers");
+const { AuthController, ApplicationController, UploadController, PaymentController, NotificationController, StripePaymentController, QueryController } = require("../controllers");
 const { authenticateToken, requireRole, upload, documentUpload } = require("../middleware");
 
 const router = express.Router();
@@ -40,6 +40,11 @@ router.get("/dashboard", authenticateToken, requireRole("admin"), ApplicationCon
 // Payment routes (admin only - authenticated)
 router.get("/payments/stats", authenticateToken, requireRole("admin"), PaymentController.getStats);
 router.get("/payments/transactions", authenticateToken, requireRole("admin"), PaymentController.getTransactions);
+
+// Query (Contact Us) routes
+router.post("/queries", QueryController.create);
+router.get("/queries", authenticateToken, requireRole("admin", "support"), QueryController.getAll);
+router.get("/queries/:id", authenticateToken, requireRole("admin", "support"), QueryController.getById);
 
 // Notification routes (admin only - authenticated)
 router.get("/notifications/stream", authenticateToken, requireRole("admin"), NotificationController.sseStream);

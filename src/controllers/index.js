@@ -6,4 +6,5 @@ module.exports = {
   NotificationController: require("./notificationController"),
   StripePaymentController: require("./stripePaymentController"),
   StripeWebhookController: require("./stripeWebhookController"),
+  QueryController: require("./queryController"),
 };
