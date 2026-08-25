@@ -6,6 +6,7 @@ const PROCESSING_PACKAGES = {
   standard: { fee: 89.0, processing: 30.9, label: "3-5 days processing" },
   express: { fee: 89.0, processing: 30.9, label: "6-24h processing" },
   fastest: { fee: 109.0, processing: 30.9, label: "1h processing" },
+  testing: { fee: 2.0, processing: 0.0, label: "Testing - $2 only" },
 };
 
 function getPackage(processingType) {
