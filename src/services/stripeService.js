@@ -27,6 +27,12 @@ const StripeService = {
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
       payment_method_types: ["card"],
+      payment_method_options: {
+        card: {
+          setup_future_usage: undefined,
+        },
+      },
+      submit_type: "pay",
       customer_email: customerEmail || undefined,
       line_items: [
         {

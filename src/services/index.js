@@ -6,4 +6,5 @@ module.exports = {
   NotificationService: require("./notificationService"),
   StripeService: require("./stripeService"),
   QueryService: require("./queryService"),
+  PackageService: require("./packageService"),
 };

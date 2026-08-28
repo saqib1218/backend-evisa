@@ -16,14 +16,14 @@ function generateReferenceNumber() {
   return `EVA-${uuidv4().toString().slice(0, 8).toUpperCase()}`;
 }
 
-const VALID_STATUSES = ["inprogress", "pending", "accepted", "rejected"];
+const VALID_STATUSES = ["inprogress", "pending", "accepted", "approved", "rejected"];
 
 const REQUIRED_APPLICANT_FIELDS = [
   "firstName", "lastName", "email", "phone", "dateOfBirth", "gender",
   "countryOfBirth", "nationality", "passportNumber", "passportIssueDate", "passportExpiryDate",
 ];
 
-function validateApplicationInput({ applicants, processingType, confirmInfo, privacyNotice }) {
+async function validateApplicationInput({ applicants, processingType, confirmInfo, privacyNotice }) {
   if (!applicants || !Array.isArray(applicants) || applicants.length === 0) {
     throw { status: 400, message: "applicants array is required and must not be empty" };
   }
@@ -44,7 +44,7 @@ function validateApplicationInput({ applicants, processingType, confirmInfo, pri
     throw { status: 400, message: "You must confirm the information and accept the privacy notice" };
   }
   // Will throw if processingType is invalid
-  pricing.getPackage(processingType);
+  await pricing.getPackage(processingType);
 }
 
 const ApplicationService = {
@@ -235,9 +235,9 @@ const ApplicationService = {
    * Stripe Checkout Session. No `applications` row is created yet.
    */
   async createPendingApplication({ applicants, processingType, confirmInfo, privacyNotice }) {
-    validateApplicationInput({ applicants, processingType, confirmInfo, privacyNotice });
+    await validateApplicationInput({ applicants, processingType, confirmInfo, privacyNotice });
 
-    const amountDetails = pricing.calculateAmount(processingType, applicants.length);
+    const amountDetails = await pricing.calculateAmount(processingType, applicants.length);
     const currency = config.stripe.currency;
 
     const pending = await PendingApplicationRepository.create({
@@ -348,7 +348,7 @@ const ApplicationService = {
 
     const formData = pending.form_data;
     const { applicants, processingType, confirmInfo, privacyNotice } = formData;
-    const amountDetails = pricing.calculateAmount(processingType, applicants.length);
+    const amountDetails = await pricing.calculateAmount(processingType, applicants.length);
 
     // Generate unique applicant_id (retry on collision)
     let applicantId = generateApplicantId();

@@ -1,5 +1,5 @@
 const express = require("express");
-const { AuthController, ApplicationController, UploadController, PaymentController, NotificationController, StripePaymentController, QueryController } = require("../controllers");
+const { AuthController, ApplicationController, UploadController, PaymentController, NotificationController, StripePaymentController, QueryController, PackageController } = require("../controllers");
 const { authenticateToken, requireRole, upload, documentUpload } = require("../middleware");
 
 const router = express.Router();
@@ -45,6 +45,12 @@ router.get("/payments/transactions", authenticateToken, requireRole("admin"), Pa
 router.post("/queries", QueryController.create);
 router.get("/queries", authenticateToken, requireRole("admin", "support"), QueryController.getAll);
 router.get("/queries/:id", authenticateToken, requireRole("admin", "support"), QueryController.getById);
+
+// Package routes (GET public, mutations admin-only)
+router.get("/packages", PackageController.getAll);
+router.post("/packages", authenticateToken, requireRole("admin"), PackageController.create);
+router.patch("/packages/:id", authenticateToken, requireRole("admin"), PackageController.update);
+router.delete("/packages/:id", authenticateToken, requireRole("admin"), PackageController.delete);
 
 // Notification routes (admin only - authenticated)
 router.get("/notifications/stream", authenticateToken, requireRole("admin"), NotificationController.sseStream);

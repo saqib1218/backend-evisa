@@ -4,6 +4,7 @@ const STATUS_LABELS = {
   pending: "Pending",
   inprogress: "In Progress",
   accepted: "Accepted",
+  approved: "Approved",
   rejected: "Rejected",
 };
 

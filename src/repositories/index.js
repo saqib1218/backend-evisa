@@ -7,4 +7,5 @@ module.exports = {
   PendingApplicationRepository: require("./pendingApplicationRepository"),
   StripeWebhookEventRepository: require("./stripeWebhookEventRepository"),
   QueryRepository: require("./queryRepository"),
+  PackageRepository: require("./packageRepository"),
 };

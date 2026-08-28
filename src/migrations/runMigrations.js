@@ -10,6 +10,7 @@ const migrations = [
   require("./007_create_notifications"),
   require("./008_create_stripe_payments"),
   require("./009_create_queries"),
+  require("./010_create_packages"),
 ];
 
 const run = async () => {
