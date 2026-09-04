@@ -30,6 +30,7 @@ module.exports = {
     apiKey: process.env.SENDGRID_API_KEY || "",
     fromEmail: process.env.SENDGRID_FROM_EMAIL || "",
     replyTo: process.env.SENDGRID_REPLY_TO || "",
+    adminNotifyEmail: process.env.ADMIN_NOTIFY_EMAIL || "",
   },
   appUrl: process.env.APP_URL || "http://localhost:5000",
   frontendUrl: process.env.FRONTEND_URL || "http://localhost:3000",

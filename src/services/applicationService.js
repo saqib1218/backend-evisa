@@ -1,7 +1,7 @@
 const { ApplicationRepository, PendingApplicationRepository } = require("../repositories");
 const { v4: uuidv4 } = require("uuid");
 const EmailService = require("./emailService");
-const { applicationReceived, applicationStatusUpdate } = require("./emailTemplates");
+const { applicationReceived, applicationStatusUpdate, adminNewApplicationNotification } = require("./emailTemplates");
 const config = require("../config");
 const pricing = require("../config/pricing");
 const NotificationService = require("./notificationService");
@@ -178,11 +178,14 @@ const ApplicationService = {
     }
     const updatedApplication = await ApplicationRepository.updateOutcome(id, { status, adminId, notes, visaDocumentUrl });
 
+    const EMAIL_NOTIFIED_STATUSES = ["approved", "rejected"];
+
     // Send status update email (best-effort, must not fail the request)
+    // Only notify the applicant on final decisions (approved/rejected).
     try {
       const details = await ApplicationRepository.findByIdWithDetails(id);
       const primaryApplicant = details?.applicants?.[0];
-      if (primaryApplicant?.email) {
+      if (EMAIL_NOTIFIED_STATUSES.includes(status) && primaryApplicant?.email) {
         const fullName = `${primaryApplicant.first_name || ""} ${primaryApplicant.last_name || ""}`.trim() || "Applicant";
         const imageUrl = updatedApplication.visa_document_url
           ? `${config.appUrl}${updatedApplication.visa_document_url}`
@@ -417,6 +420,31 @@ const ApplicationService = {
       }
     } catch (emailErr) {
       console.error("Failed to send application confirmation email:", emailErr.message);
+    }
+
+    // Notify admin of new submission (best-effort)
+    try {
+      const adminEmail = config.sendgrid.adminNotifyEmail || config.sendgrid.replyTo;
+      if (adminEmail) {
+        const primaryApplicant = applicants[0];
+        const fullName = `${primaryApplicant?.firstName || ""} ${primaryApplicant?.lastName || ""}`.trim() || "Applicant";
+        const html = adminNewApplicationNotification({
+          fullName,
+          applicantId: application.applicant_id,
+          referenceNumber: application.reference_number,
+          amountPaid: amountDetails.grandTotal,
+          currency: pending.currency,
+          processingType,
+          applicantCount: applicants.length,
+        });
+        await EmailService.sendEmail({
+          to: adminEmail,
+          subject: `New eVisa ETA Application Submitted - ${application.reference_number}`,
+          html,
+        });
+      }
+    } catch (emailErr) {
+      console.error("Failed to send admin new application notification email:", emailErr.message);
     }
 
     // Create notification for admin (best-effort)

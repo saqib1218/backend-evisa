@@ -329,7 +329,60 @@ function applicationStatusUpdate({ fullName, applicantId, status, notes, imageUr
   `;
 }
 
+function adminNewApplicationNotification({ fullName, applicantId, referenceNumber, amountPaid, currency, processingType, applicantCount }) {
+  const issueDate = new Date().toLocaleString("en-GB", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+  return `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>New eVisa ETA Application Submitted</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f5f5f5;font-family:Helvetica,Arial,sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f5f5f5;padding:32px 0;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e0e0e0;">
+          <tr>
+            <td style="background-color:#2d76b5;padding:24px 32px;">
+              <p style="margin:0;color:#ffffff;font-size:18px;font-weight:700;">New Application Submitted</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:28px 32px;">
+              <p style="margin:0 0 16px 0;font-size:15px;color:#1a1a2e;line-height:1.6;">
+                A new eVisa ETA application has been submitted and payment has been confirmed. Please log in to the admin dashboard to review it.
+              </p>
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:16px 0;">
+                <tr><td style="padding:6px 0;font-size:13px;color:#575757;width:40%;">Applicant Name</td><td style="padding:6px 0;font-size:14px;color:#0f0f0f;font-weight:600;">${fullName}</td></tr>
+                <tr><td style="padding:6px 0;font-size:13px;color:#575757;">Applicant ID</td><td style="padding:6px 0;font-size:14px;color:#0f0f0f;font-weight:600;">${applicantId}</td></tr>
+                <tr><td style="padding:6px 0;font-size:13px;color:#575757;">Reference Number</td><td style="padding:6px 0;font-size:14px;color:#0f0f0f;font-weight:600;">${referenceNumber}</td></tr>
+                <tr><td style="padding:6px 0;font-size:13px;color:#575757;">Processing Type</td><td style="padding:6px 0;font-size:14px;color:#0f0f0f;font-weight:600;">${processingType}</td></tr>
+                <tr><td style="padding:6px 0;font-size:13px;color:#575757;">Applicants</td><td style="padding:6px 0;font-size:14px;color:#0f0f0f;font-weight:600;">${applicantCount}</td></tr>
+                <tr><td style="padding:6px 0;font-size:13px;color:#575757;">Amount Paid</td><td style="padding:6px 0;font-size:14px;color:#0f0f0f;font-weight:600;">${amountPaid} ${(currency || "").toUpperCase()}</td></tr>
+                <tr><td style="padding:6px 0;font-size:13px;color:#575757;">Submitted On</td><td style="padding:6px 0;font-size:14px;color:#0f0f0f;font-weight:600;">${issueDate}</td></tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+  `;
+}
+
 module.exports = {
   applicationReceived,
   applicationStatusUpdate,
+  adminNewApplicationNotification,
 };
