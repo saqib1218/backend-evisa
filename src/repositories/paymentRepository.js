@@ -31,9 +31,10 @@ const PaymentRepository = {
     if (search) {
       whereClauses.push(`(
         a.reference_number ILIKE $${paramIndex} OR
+        ap.applicant_id ILIKE $${paramIndex} OR
         a.applicant_id ILIKE $${paramIndex} OR
-        (SELECT CONCAT(ap2.first_name, ' ', ap2.last_name) FROM applicants ap2 WHERE ap2.application_id = a.id ORDER BY ap2.created_at LIMIT 1) ILIKE $${paramIndex} OR
-        (SELECT ap2.email FROM applicants ap2 WHERE ap2.application_id = a.id ORDER BY ap2.created_at LIMIT 1) ILIKE $${paramIndex}
+        CONCAT(ap.first_name, ' ', ap.last_name) ILIKE $${paramIndex} OR
+        ap.email ILIKE $${paramIndex}
       )`);
       params.push(`%${search}%`);
       paramIndex++;
@@ -54,9 +55,10 @@ const PaymentRepository = {
     const whereSQL = whereClauses.length > 0 ? `WHERE ${whereClauses.join(" AND ")}` : "";
 
     const countResult = await db.query(
-      `SELECT COUNT(DISTINCT a.id) as total
+      `SELECT COUNT(*) as total
        FROM applications a
        INNER JOIN payments p ON a.id = p.application_id
+       INNER JOIN applicants ap ON a.id = ap.application_id
        ${whereSQL}`,
       params
     );
@@ -65,14 +67,16 @@ const PaymentRepository = {
     const offset = (page - 1) * limit;
 
     const dataResult = await db.query(
-      `SELECT a.id, a.reference_number, a.applicant_id, a.status, a.processing_type,
-              a.created_at, a.submit_date,
-              p.grand_total, p.payment_status,
-              (SELECT CONCAT(ap2.first_name, ' ', ap2.last_name) FROM applicants ap2 WHERE ap2.application_id = a.id ORDER BY ap2.created_at LIMIT 1) as customer_name
+      `SELECT a.id, a.reference_number, a.applicant_id as order_applicant_id,
+              a.processing_type, a.created_at, a.submit_date,
+              ap.id as applicant_pk, ap.applicant_id, ap.first_name, ap.last_name,
+              ap.email, ap.status as applicant_status, ap.fee_amount,
+              p.grand_total, p.payment_status
        FROM applications a
        INNER JOIN payments p ON a.id = p.application_id
+       INNER JOIN applicants ap ON a.id = ap.application_id
        ${whereSQL}
-       ORDER BY a.created_at DESC
+       ORDER BY a.created_at DESC, ap.created_at ASC
        LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
       [...params, limit, offset]
     );

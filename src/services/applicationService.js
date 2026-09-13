@@ -16,6 +16,27 @@ function generateReferenceNumber() {
   return `EVA-${uuidv4().toString().slice(0, 8).toUpperCase()}`;
 }
 
+/**
+ * Generates `count` mutually-unique applicant IDs, none of which collide
+ * with each other or with any ID already stored on either the orders
+ * table (applications.applicant_id) or the per-applicant table
+ * (applicants.applicant_id).
+ */
+async function generateUniqueApplicantIds(count) {
+  const generated = new Set();
+  while (generated.size < count) {
+    const candidate = generateApplicantId();
+    if (generated.has(candidate)) continue;
+    const [orderMatch, personMatch] = await Promise.all([
+      ApplicationRepository.findByApplicantId(candidate),
+      ApplicationRepository.findApplicantByApplicantId(candidate),
+    ]);
+    if (orderMatch || personMatch) continue;
+    generated.add(candidate);
+  }
+  return Array.from(generated);
+}
+
 const VALID_STATUSES = ["inprogress", "pending", "accepted", "approved", "rejected"];
 
 const REQUIRED_APPLICANT_FIELDS = [
@@ -61,6 +82,10 @@ const ApplicationService = {
 
     const referenceNumber = generateReferenceNumber();
 
+    // Every applicant on this order gets their own unique, trackable ID
+    const personIds = await generateUniqueApplicantIds(applicants.length);
+    const applicantsWithIds = applicants.map((a, idx) => ({ ...a, applicantId: personIds[idx] }));
+
     const application = await ApplicationRepository.create({
       userId,
       applicantId,
@@ -68,27 +93,28 @@ const ApplicationService = {
       processingType: processingType || "standard",
       confirmInfo: confirmInfo || false,
       privacyNotice: privacyNotice || false,
-      applicants,
+      applicants: applicantsWithIds,
       payment,
     });
 
-    // Send confirmation email (best-effort, must not fail the request)
-    try {
-      const primaryApplicant = applicants[0];
-      if (primaryApplicant?.email) {
-        const fullName = `${primaryApplicant.firstName || ""} ${primaryApplicant.lastName || ""}`.trim() || "Applicant";
-        const html = applicationReceived({
-          fullName,
-          applicantId: application.applicant_id,
-        });
-        await EmailService.sendEmail({
-          to: primaryApplicant.email,
-          subject: "eVisa ETA - Application Received",
-          html,
-        });
+    // Send confirmation email to EVERY applicant (best-effort, must not fail the request)
+    for (const applicantData of applicantsWithIds) {
+      try {
+        if (applicantData?.email) {
+          const fullName = `${applicantData.firstName || ""} ${applicantData.lastName || ""}`.trim() || "Applicant";
+          const html = applicationReceived({
+            fullName,
+            applicantId: applicantData.applicantId,
+          });
+          await EmailService.sendEmail({
+            to: applicantData.email,
+            subject: "eVisa ETA - Application Received",
+            html,
+          });
+        }
+      } catch (emailErr) {
+        console.error("Failed to send application confirmation email to", applicantData?.email, ":", emailErr.message);
       }
-    } catch (emailErr) {
-      console.error("Failed to send application confirmation email:", emailErr.message);
     }
 
     // Create notification for admin (best-effort)
@@ -208,6 +234,83 @@ const ApplicationService = {
     }
 
     return updatedApplication;
+  },
+
+  /**
+   * Updates the outcome (status/notes/visa document) for a SINGLE applicant
+   * within an application, independently of the other applicants on the
+   * same order. Emails only that specific applicant, and re-derives the
+   * order-level `applications.status` from all applicants' statuses.
+   */
+  async updateApplicantOutcome(applicationId, applicantId, { status, adminId, notes, visaDocumentUrl }) {
+    const application = await ApplicationRepository.findById(applicationId);
+    if (!application) {
+      throw { status: 404, message: "Application not found" };
+    }
+    const applicant = await ApplicationRepository.findApplicantById(applicantId);
+    if (!applicant || applicant.application_id !== applicationId) {
+      throw { status: 404, message: "Applicant not found for this application" };
+    }
+    if (!VALID_STATUSES.includes(status)) {
+      throw { status: 400, message: `Invalid status. Must be one of: ${VALID_STATUSES.join(", ")}` };
+    }
+
+    const oldStatus = applicant.status;
+    const updatedApplicant = await ApplicationRepository.updateApplicantOutcome(applicantId, {
+      status,
+      notes,
+      visaDocumentUrl,
+    });
+
+    // Keep the order-level status in sync with the individual applicants
+    const updatedApplication = await ApplicationRepository.syncApplicationStatusFromApplicants(applicationId);
+
+    // Log the status change against the application, noting which applicant it was for
+    try {
+      const db = require("../config/database");
+      await db.query(
+        `INSERT INTO application_status_logs (application_id, admin_id, old_status, new_status, notes)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [
+          applicationId,
+          adminId || null,
+          oldStatus,
+          status,
+          `[${applicant.first_name} ${applicant.last_name}] ${notes || ""}`.trim(),
+        ]
+      );
+    } catch (logErr) {
+      console.error("Failed to write applicant status log:", logErr.message);
+    }
+
+    const EMAIL_NOTIFIED_STATUSES = ["approved", "rejected"];
+
+    // Email only this applicant (best-effort, must not fail the request)
+    try {
+      if (EMAIL_NOTIFIED_STATUSES.includes(status) && applicant.email) {
+        const fullName = `${applicant.first_name || ""} ${applicant.last_name || ""}`.trim() || "Applicant";
+        const imageUrl = updatedApplicant.visa_document_url
+          ? `${config.appUrl}${updatedApplicant.visa_document_url}`
+          : null;
+        const html = applicationStatusUpdate({
+          fullName,
+          applicantId: applicant.applicant_id,
+          status,
+          notes: notes || null,
+          imageUrl,
+        });
+        await EmailService.sendEmail({
+          to: applicant.email,
+          subject: `eVisa ETA - Application ${status.charAt(0).toUpperCase() + status.slice(1)}`,
+          html,
+        });
+        await ApplicationRepository.markApplicantEmailSent(applicantId);
+      }
+    } catch (emailErr) {
+      console.error("Failed to send applicant status update email:", emailErr.message);
+    }
+
+    return { application: updatedApplication, applicant: updatedApplicant };
   },
 
   async updatePaymentStatus(applicationId, { paymentStatus, transactionId }) {
@@ -364,6 +467,10 @@ const ApplicationService = {
     }
     const referenceNumber = generateReferenceNumber();
 
+    // Every applicant on this order gets their own unique, trackable ID
+    const personIds = await generateUniqueApplicantIds(applicants.length);
+    const applicantsWithIds = applicants.map((a, idx) => ({ ...a, applicantId: personIds[idx] }));
+
     let application;
     try {
       application = await ApplicationRepository.create({
@@ -372,7 +479,7 @@ const ApplicationService = {
         processingType,
         confirmInfo,
         privacyNotice,
-        applicants,
+        applicants: applicantsWithIds,
         payment: {
           applicantCount: applicants.length,
           processingType,
@@ -397,26 +504,28 @@ const ApplicationService = {
 
     await PendingApplicationRepository.markCompleted(pending.id, application.id);
 
-    // Send confirmation email (idempotency guarded via confirmation_email_sent)
+    // Send confirmation email to EVERY applicant (idempotency guarded via confirmation_email_sent)
     try {
-      const primaryApplicant = applicants[0];
-      if (primaryApplicant?.email) {
-        const fullName = `${primaryApplicant.firstName || ""} ${primaryApplicant.lastName || ""}`.trim() || "Applicant";
+      let anySent = false;
+      for (const applicantData of applicantsWithIds) {
+        if (!applicantData?.email) continue;
+        const fullName = `${applicantData.firstName || ""} ${applicantData.lastName || ""}`.trim() || "Applicant";
         const html = applicationReceived({
           fullName,
-          applicantId: application.applicant_id,
+          applicantId: applicantData.applicantId,
           referenceNumber: application.reference_number,
           amountPaid: amountDetails.grandTotal,
           currency: pending.currency,
         });
         const result = await EmailService.sendEmail({
-          to: primaryApplicant.email,
+          to: applicantData.email,
           subject: "eVisa ETA - Application Received & Payment Confirmed",
           html,
         });
-        if (result.success) {
-          await ApplicationRepository.markConfirmationEmailSent(application.id);
-        }
+        if (result.success) anySent = true;
+      }
+      if (anySent) {
+        await ApplicationRepository.markConfirmationEmailSent(application.id);
       }
     } catch (emailErr) {
       console.error("Failed to send application confirmation email:", emailErr.message);

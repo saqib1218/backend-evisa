@@ -19,9 +19,6 @@ router.post("/payments/create-checkout-session", StripePaymentController.createC
 router.get("/payments/status/:sessionId", StripePaymentController.getPaymentStatus);
 
 // Application routes (public)
-// NOTE: direct application creation is intentionally NOT exposed here.
-// Applications are only created after a verified Stripe payment via the
-// /payments/create-checkout-session + webhook flow above.
 router.post("/applications/track", ApplicationController.track);
 router.get("/applications/track/:referenceNumber", ApplicationController.getByReference);
 router.get("/applications/applicant/:applicantId", ApplicationController.getByApplicantId);
@@ -31,6 +28,7 @@ router.get("/applications", authenticateToken, requireRole("admin", "support"), 
 router.get("/applications/:id/details", authenticateToken, requireRole("admin", "support"), ApplicationController.getDetails);
 router.patch("/applications/:id/status", authenticateToken, requireRole("admin"), ApplicationController.updateStatus);
 router.patch("/applications/:id/outcome", authenticateToken, requireRole("admin"), documentUpload.single("visaDocument"), ApplicationController.updateOutcome);
+router.patch("/applications/:id/applicants/:applicantId/outcome", authenticateToken, requireRole("admin"), documentUpload.single("visaDocument"), ApplicationController.updateApplicantOutcome);
 router.patch("/applications/:id/payment", authenticateToken, requireRole("admin"), ApplicationController.updatePayment);
 router.delete("/applications/:id", authenticateToken, requireRole("admin"), ApplicationController.delete);
 

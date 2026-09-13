@@ -11,6 +11,8 @@ const migrations = [
   require("./008_create_stripe_payments"),
   require("./009_create_queries"),
   require("./010_create_packages"),
+  require("./011_add_applicant_outcome_fields"),
+  require("./012_add_applicant_unique_id"),
 ];
 
 const run = async () => {

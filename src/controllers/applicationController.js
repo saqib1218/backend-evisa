@@ -119,6 +119,24 @@ const ApplicationController = {
     }
   },
 
+  async updateApplicantOutcome(req, res, next) {
+    try {
+      const { id, applicantId } = req.params;
+      const { status, notes } = req.body;
+      const adminId = req.user?.id;
+      const visaDocumentUrl = req.file ? `/uploads/${req.file.filename}` : null;
+      const result = await ApplicationService.updateApplicantOutcome(id, applicantId, {
+        status,
+        adminId,
+        notes,
+        visaDocumentUrl,
+      });
+      res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  },
+
   async updatePayment(req, res, next) {
     try {
       const { id } = req.params;

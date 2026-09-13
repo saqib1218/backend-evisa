@@ -11,27 +11,32 @@ const ApplicationRepository = {
       // 1. Insert application
       const appResult = await client.query(
         `INSERT INTO applications (user_id, applicant_id, reference_number, status, payment_status, processing_type, confirm_info, privacy_notice, submit_date)
-         VALUES ($1, $2, $3, 'pending', $4, $5, $6, $7, NOW())
+         VALUES ($1, $2, $3, 'inprogress', $4, $5, $6, $7, NOW())
          RETURNING *`,
         [userId || null, applicantId, referenceNumber, isPaid, processingType, confirmInfo, privacyNotice]
       );
       const application = appResult.rows[0];
 
-      // 2. Insert applicants (travellers)
+      // 2. Insert applicants (travellers) — each gets an equal share of the
+      // grand total (fee_amount) AND their own unique applicant_id, so both
+      // the fee and the tracking ID are tracked separately per person.
+      const feeShare = payment?.grandTotal
+        ? Math.round((payment.grandTotal / applicants.length) * 100) / 100
+        : null;
       for (const a of applicants) {
         await client.query(
           `INSERT INTO applicants
-            (application_id, first_name, last_name, email, phone, date_of_birth, gender, country_of_birth,
+            (application_id, applicant_id, first_name, last_name, email, phone, date_of_birth, gender, country_of_birth,
              nationality, passport_number, passport_issue_date, passport_expiry_date,
              dual_citizenship, previously_applied_uk, passport_image_url, personal_photo_url,
-             image_consent, photo_consent)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)`,
+             image_consent, photo_consent, fee_amount, status)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, 'inprogress')`,
           [
-            application.id,
+            application.id, a.applicantId,
             a.firstName, a.lastName, a.email, a.phone, a.dateOfBirth, a.gender, a.countryOfBirth,
             a.nationality, a.passportNumber, a.passportIssueDate, a.passportExpiryDate,
             a.dualCitizenship, a.previouslyAppliedUk, a.passportImageUrl, a.personalPhotoUrl,
-            a.imageConsent, a.photoConsent,
+            a.imageConsent, a.photoConsent, feeShare,
           ]
         );
       }
@@ -70,8 +75,26 @@ const ApplicationRepository = {
     return result.rows[0];
   },
 
+  /**
+   * Resolves an applicant_id to its parent application. Checks the
+   * order-level ID first (applications.applicant_id — the ID scheme used
+   * before per-applicant IDs existed, and still valid for anyone who
+   * already received it by email), then falls back to the newer
+   * per-applicant ID (applicants.applicant_id).
+   */
   async findByApplicantId(applicantId) {
-    const result = await db.query("SELECT * FROM applications WHERE applicant_id = $1", [applicantId]);
+    const orderResult = await db.query("SELECT * FROM applications WHERE applicant_id = $1", [applicantId]);
+    if (orderResult.rows[0]) return orderResult.rows[0];
+
+    const personResult = await db.query("SELECT application_id FROM applicants WHERE applicant_id = $1", [applicantId]);
+    if (!personResult.rows[0]) return null;
+
+    const appResult = await db.query("SELECT * FROM applications WHERE id = $1", [personResult.rows[0].application_id]);
+    return appResult.rows[0];
+  },
+
+  async findApplicantByApplicantId(applicantId) {
+    const result = await db.query("SELECT * FROM applicants WHERE applicant_id = $1", [applicantId]);
     return result.rows[0];
   },
 
@@ -116,9 +139,10 @@ const ApplicationRepository = {
     if (search) {
       whereClauses.push(`(
         a.reference_number ILIKE $${paramIndex} OR
+        ap.applicant_id ILIKE $${paramIndex} OR
         a.applicant_id ILIKE $${paramIndex} OR
-        (SELECT CONCAT(ap2.first_name, ' ', ap2.last_name) FROM applicants ap2 WHERE ap2.application_id = a.id ORDER BY ap2.created_at LIMIT 1) ILIKE $${paramIndex} OR
-        (SELECT ap2.email FROM applicants ap2 WHERE ap2.application_id = a.id ORDER BY ap2.created_at LIMIT 1) ILIKE $${paramIndex}
+        CONCAT(ap.first_name, ' ', ap.last_name) ILIKE $${paramIndex} OR
+        ap.email ILIKE $${paramIndex}
       )`);
       params.push(`%${search}%`);
       paramIndex++;
@@ -139,9 +163,9 @@ const ApplicationRepository = {
     const whereSQL = whereClauses.length > 0 ? `WHERE ${whereClauses.join(" AND ")}` : "";
 
     const countResult = await db.query(
-      `SELECT COUNT(DISTINCT a.id) as total
+      `SELECT COUNT(*) as total
        FROM applications a
-       LEFT JOIN applicants ap ON a.id = ap.application_id
+       JOIN applicants ap ON a.id = ap.application_id
        LEFT JOIN payments p ON a.id = p.application_id
        ${whereSQL}`,
       params
@@ -151,16 +175,17 @@ const ApplicationRepository = {
     const offset = (page - 1) * limit;
 
     const dataResult = await db.query(
-      `SELECT a.*, 
-              COUNT(ap.id) as applicant_count,
+      `SELECT a.id, a.reference_number, a.applicant_id as order_applicant_id,
+              a.processing_type, a.created_at, a.submit_date,
+              ap.id as applicant_pk, ap.applicant_id, ap.first_name, ap.last_name,
+              ap.email, ap.status as applicant_status, ap.fee_amount,
               p.grand_total, p.payment_status,
-              (SELECT CONCAT(ap2.first_name, ' ', ap2.last_name) FROM applicants ap2 WHERE ap2.application_id = a.id ORDER BY ap2.created_at LIMIT 1) as customer_name
+              (SELECT COUNT(*) FROM applicants ap3 WHERE ap3.application_id = a.id) as applicant_count
        FROM applications a
-       LEFT JOIN applicants ap ON a.id = ap.application_id
+       JOIN applicants ap ON a.id = ap.application_id
        LEFT JOIN payments p ON a.id = p.application_id
        ${whereSQL}
-       GROUP BY a.id, p.grand_total, p.payment_status
-       ORDER BY a.created_at DESC
+       ORDER BY a.created_at DESC, ap.created_at ASC
        LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
       [...params, limit, offset]
     );
@@ -217,6 +242,53 @@ const ApplicationRepository = {
     return result.rows[0];
   },
 
+  async findApplicantById(applicantId) {
+    const result = await db.query("SELECT * FROM applicants WHERE id = $1", [applicantId]);
+    return result.rows[0];
+  },
+
+  async updateApplicantOutcome(applicantId, { status, notes, visaDocumentUrl }) {
+    const result = await db.query(
+      `UPDATE applicants
+       SET status = $1,
+           admin_notes = COALESCE($2, admin_notes),
+           visa_document_url = COALESCE($3, visa_document_url),
+           updated_at = NOW()
+       WHERE id = $4 RETURNING *`,
+      [status, notes || null, visaDocumentUrl || null, applicantId]
+    );
+    return result.rows[0];
+  },
+
+  async markApplicantEmailSent(applicantId) {
+    const result = await db.query(
+      `UPDATE applicants SET email_sent = true, updated_at = NOW() WHERE id = $1 RETURNING *`,
+      [applicantId]
+    );
+    return result.rows[0];
+  },
+
+  /**
+   * Derives the overall application status from the individual applicant
+   * statuses so the order-level status reflects mixed outcomes:
+   *  - all applicants share the same status -> application takes that status
+   *  - otherwise -> "inprogress" (mixed / partially decided)
+   */
+  async syncApplicationStatusFromApplicants(applicationId) {
+    const result = await db.query(
+      "SELECT DISTINCT status FROM applicants WHERE application_id = $1",
+      [applicationId]
+    );
+    const distinctStatuses = result.rows.map((r) => r.status);
+    const derivedStatus = distinctStatuses.length === 1 ? distinctStatuses[0] : "inprogress";
+
+    const updateResult = await db.query(
+      `UPDATE applications SET status = $1, updated_at = NOW() WHERE id = $2 RETURNING *`,
+      [derivedStatus, applicationId]
+    );
+    return updateResult.rows[0];
+  },
+
   async updatePaymentStatus(applicationId, { paymentStatus, transactionId }) {
     const result = await db.query(
       `UPDATE payments SET payment_status = $1, transaction_id = COALESCE($2, transaction_id), paid_at = CASE WHEN $1 = true THEN NOW() ELSE paid_at END, updated_at = NOW() WHERE application_id = $3 RETURNING *`,
@@ -226,10 +298,8 @@ const ApplicationRepository = {
   },
 
   async trackApplication(applicantId, email) {
-    const appResult = await db.query("SELECT * FROM applications WHERE applicant_id = $1", [applicantId]);
-    if (!appResult.rows[0]) return null;
-
-    const application = appResult.rows[0];
+    const application = await this.findByApplicantId(applicantId);
+    if (!application) return null;
 
     const emailCheck = await db.query(
       "SELECT 1 FROM applicants WHERE application_id = $1 AND email = $2",
