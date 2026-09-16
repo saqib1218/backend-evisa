@@ -7,7 +7,7 @@ const PaymentRepository = {
               COUNT(*) as successful_orders
        FROM payments p
        INNER JOIN applications a ON a.id = p.application_id
-       WHERE p.payment_status = true AND a.status = 'accepted'`
+       WHERE p.payment_status = true AND a.status = 'approved'`
     );
 
     const totalRevenue = parseFloat(revenueResult.rows[0].total_revenue) || 0;
