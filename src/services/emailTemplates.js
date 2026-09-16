@@ -173,13 +173,25 @@ ${paymentConfirmationBlock}
   `;
 }
 
-function applicationStatusUpdate({ fullName, applicantId, status, notes, imageUrl }) {
+function applicationStatusUpdate({ fullName, applicantId, status, notes, imageUrl, documentType, documentName }) {
   const statusLabel = STATUS_LABELS[status] || status;
   const issueDate = new Date().toLocaleDateString("en-GB", {
     day: "numeric",
     month: "long",
     year: "numeric",
   });
+
+  const documentBlock = imageUrl
+    ? `<div style="text-align:center;margin:0 0 28px 0;">
+  <img src="${imageUrl}" alt="Application Document" style="max-width:100%;height:auto;border:1px solid #b8860b;border-radius:4px;">
+</div>`
+    : documentType === "pdf"
+      ? `<div style="text-align:center;margin:0 0 28px 0;padding:16px;background:#f5f0e8;border:1px solid #b8860b;border-radius:4px;">
+  <p style="font-family:'Source Sans 3',Helvetica,Arial,sans-serif;font-size:14px;font-weight:600;color:#1a1a2e;margin:0;">
+    Your visa document (${documentName || "document.pdf"}) is attached to this email as a PDF.
+  </p>
+</div>`
+      : "";
 
   return `
 <!DOCTYPE html>
@@ -261,13 +273,7 @@ function applicationStatusUpdate({ fullName, applicantId, status, notes, imageUr
                   : ""
               }
 
-              ${
-                imageUrl
-                  ? `<div style="text-align:center;margin:0 0 28px 0;">
-                <img src="${imageUrl}" alt="Application Document" style="max-width:100%;height:auto;border:1px solid #b8860b;border-radius:4px;">
-              </div>`
-                  : ""
-              }
+              ${documentBlock}
 
               <p style="font-family:'Source Sans 3',Helvetica,Arial,sans-serif;font-size:11px;font-weight:700;color:#5a5a6e;letter-spacing:0.22em;text-transform:uppercase;text-align:center;margin:0 0 8px 0;">
                 Application Identification Number

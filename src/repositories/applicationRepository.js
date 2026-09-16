@@ -29,14 +29,14 @@ const ApplicationRepository = {
             (application_id, applicant_id, first_name, last_name, email, phone, date_of_birth, gender, country_of_birth,
              nationality, passport_number, passport_issue_date, passport_expiry_date,
              dual_citizenship, previously_applied_uk, passport_image_url, personal_photo_url,
-             image_consent, photo_consent, fee_amount, status)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, 'inprogress')`,
+             image_consent, photo_consent, fee_amount, status, job)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, 'inprogress', $21)`,
           [
             application.id, a.applicantId,
             a.firstName, a.lastName, a.email, a.phone, a.dateOfBirth, a.gender, a.countryOfBirth,
             a.nationality, a.passportNumber, a.passportIssueDate, a.passportExpiryDate,
             a.dualCitizenship, a.previouslyAppliedUk, a.passportImageUrl, a.personalPhotoUrl,
-            a.imageConsent, a.photoConsent, feeShare,
+            a.imageConsent, a.photoConsent, feeShare, a.job || null,
           ]
         );
       }

@@ -6,6 +6,32 @@ const config = require("../config");
 const pricing = require("../config/pricing");
 const NotificationService = require("./notificationService");
 const StripeService = require("./stripeService");
+const fs = require("fs");
+const path = require("path");
+
+const IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp"];
+const IMAGE_MIME_TYPES = ["image/jpeg", "image/png", "image/webp", "image/jpg"];
+
+function isImageFile(filename, mimetype) {
+  const ext = path.extname(filename || "").toLowerCase();
+  return IMAGE_EXTENSIONS.includes(ext) || IMAGE_MIME_TYPES.includes(mimetype);
+}
+
+function isPdfFile(filename, mimetype) {
+  const ext = path.extname(filename || "").toLowerCase();
+  return ext === ".pdf" || mimetype === "application/pdf";
+}
+
+function buildPdfAttachment(filePath, originalName) {
+  const fileBuffer = fs.readFileSync(filePath);
+  const base64Content = fileBuffer.toString("base64");
+  return {
+    content: base64Content,
+    type: "application/pdf",
+    disposition: "attachment",
+    filename: originalName || path.basename(filePath),
+  };
+}
 
 function generateApplicantId() {
   const num = Math.floor(10000 + Math.random() * 90000);
@@ -194,7 +220,7 @@ const ApplicationService = {
     return ApplicationRepository.updateStatus(id, { status, adminId, notes });
   },
 
-  async updateOutcome(id, { status, adminId, notes, visaDocumentUrl }) {
+  async updateOutcome(id, { status, adminId, notes, visaDocumentUrl, visaDocumentMeta }) {
     const application = await ApplicationRepository.findById(id);
     if (!application) {
       throw { status: 404, message: "Application not found" };
@@ -213,20 +239,43 @@ const ApplicationService = {
       const primaryApplicant = details?.applicants?.[0];
       if (EMAIL_NOTIFIED_STATUSES.includes(status) && primaryApplicant?.email) {
         const fullName = `${primaryApplicant.first_name || ""} ${primaryApplicant.last_name || ""}`.trim() || "Applicant";
-        const imageUrl = updatedApplication.visa_document_url
-          ? `${config.appUrl}${updatedApplication.visa_document_url}`
-          : null;
+
+        let imageUrl = null;
+        let documentType = null;
+        let documentName = null;
+        let attachments = [];
+
+        if (updatedApplication.visa_document_url) {
+          const filename = visaDocumentMeta?.filename || path.basename(updatedApplication.visa_document_url);
+          const originalName = visaDocumentMeta?.originalName || filename;
+          const mimetype = visaDocumentMeta?.mimetype || null;
+
+          if (isPdfFile(filename, mimetype)) {
+            documentType = "pdf";
+            documentName = originalName;
+            const filePath = path.join(__dirname, "../../uploads", filename);
+            if (fs.existsSync(filePath)) {
+              attachments.push(buildPdfAttachment(filePath, originalName));
+            }
+          } else if (isImageFile(filename, mimetype)) {
+            imageUrl = `${config.appUrl}${updatedApplication.visa_document_url}`;
+          }
+        }
+
         const html = applicationStatusUpdate({
           fullName,
           applicantId: updatedApplication.applicant_id,
           status,
           notes: notes || null,
           imageUrl,
+          documentType,
+          documentName,
         });
         await EmailService.sendEmail({
           to: primaryApplicant.email,
           subject: `eVisa ETA - Application ${status.charAt(0).toUpperCase() + status.slice(1)}`,
           html,
+          attachments: attachments.length > 0 ? attachments : undefined,
         });
       }
     } catch (emailErr) {
@@ -242,7 +291,7 @@ const ApplicationService = {
    * same order. Emails only that specific applicant, and re-derives the
    * order-level `applications.status` from all applicants' statuses.
    */
-  async updateApplicantOutcome(applicationId, applicantId, { status, adminId, notes, visaDocumentUrl }) {
+  async updateApplicantOutcome(applicationId, applicantId, { status, adminId, notes, visaDocumentUrl, visaDocumentMeta }) {
     const application = await ApplicationRepository.findById(applicationId);
     if (!application) {
       throw { status: 404, message: "Application not found" };
@@ -289,20 +338,43 @@ const ApplicationService = {
     try {
       if (EMAIL_NOTIFIED_STATUSES.includes(status) && applicant.email) {
         const fullName = `${applicant.first_name || ""} ${applicant.last_name || ""}`.trim() || "Applicant";
-        const imageUrl = updatedApplicant.visa_document_url
-          ? `${config.appUrl}${updatedApplicant.visa_document_url}`
-          : null;
+
+        let imageUrl = null;
+        let documentType = null;
+        let documentName = null;
+        let attachments = [];
+
+        if (updatedApplicant.visa_document_url) {
+          const filename = visaDocumentMeta?.filename || path.basename(updatedApplicant.visa_document_url);
+          const originalName = visaDocumentMeta?.originalName || filename;
+          const mimetype = visaDocumentMeta?.mimetype || null;
+
+          if (isPdfFile(filename, mimetype)) {
+            documentType = "pdf";
+            documentName = originalName;
+            const filePath = path.join(__dirname, "../../uploads", filename);
+            if (fs.existsSync(filePath)) {
+              attachments.push(buildPdfAttachment(filePath, originalName));
+            }
+          } else if (isImageFile(filename, mimetype)) {
+            imageUrl = `${config.appUrl}${updatedApplicant.visa_document_url}`;
+          }
+        }
+
         const html = applicationStatusUpdate({
           fullName,
           applicantId: applicant.applicant_id,
           status,
           notes: notes || null,
           imageUrl,
+          documentType,
+          documentName,
         });
         await EmailService.sendEmail({
           to: applicant.email,
           subject: `eVisa ETA - Application ${status.charAt(0).toUpperCase() + status.slice(1)}`,
           html,
+          attachments: attachments.length > 0 ? attachments : undefined,
         });
         await ApplicationRepository.markApplicantEmailSent(applicantId);
       }

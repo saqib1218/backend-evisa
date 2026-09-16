@@ -107,11 +107,13 @@ const ApplicationController = {
       const { status, notes } = req.body;
       const adminId = req.user?.id;
       const visaDocumentUrl = req.file ? `/uploads/${req.file.filename}` : null;
+      const visaDocumentMeta = req.file ? { originalName: req.file.originalname, mimetype: req.file.mimetype, filename: req.file.filename } : null;
       const application = await ApplicationService.updateOutcome(id, {
         status,
         adminId,
         notes,
         visaDocumentUrl,
+        visaDocumentMeta,
       });
       res.json(application);
     } catch (err) {
@@ -125,11 +127,13 @@ const ApplicationController = {
       const { status, notes } = req.body;
       const adminId = req.user?.id;
       const visaDocumentUrl = req.file ? `/uploads/${req.file.filename}` : null;
+      const visaDocumentMeta = req.file ? { originalName: req.file.originalname, mimetype: req.file.mimetype, filename: req.file.filename } : null;
       const result = await ApplicationService.updateApplicantOutcome(id, applicantId, {
         status,
         adminId,
         notes,
         visaDocumentUrl,
+        visaDocumentMeta,
       });
       res.json(result);
     } catch (err) {

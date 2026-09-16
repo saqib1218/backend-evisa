@@ -13,6 +13,8 @@ const migrations = [
   require("./010_create_packages"),
   require("./011_add_applicant_outcome_fields"),
   require("./012_add_applicant_unique_id"),
+  require("./013_default_status_inprogress"),
+  require("./014_add_job_to_applicants"),
 ];
 
 const run = async () => {

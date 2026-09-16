@@ -8,7 +8,7 @@ if (config.sendgrid.apiKey) {
 }
 
 const EmailService = {
-  async sendEmail({ to, subject, html, replyTo }) {
+  async sendEmail({ to, subject, html, replyTo, attachments }) {
     if (!config.sendgrid.apiKey) {
       console.error("Email not sent: SENDGRID_API_KEY is missing in environment variables.");
       return { success: false, error: "SendGrid API key not configured" };
@@ -21,6 +21,10 @@ const EmailService = {
       subject,
       html,
     };
+
+    if (attachments && Array.isArray(attachments) && attachments.length > 0) {
+      msg.attachments = attachments;
+    }
 
     try {
       await sgMail.send(msg);
