@@ -34,7 +34,7 @@ const ApplicationRepository = {
           [
             application.id, a.applicantId,
             a.firstName, a.lastName, a.email, a.phone, a.dateOfBirth, a.gender, a.countryOfBirth,
-            a.nationality, a.passportNumber, a.passportIssueDate, a.passportExpiryDate,
+            a.nationality || null, a.passportNumber || null, a.passportIssueDate || null, a.passportExpiryDate || null,
             a.dualCitizenship, a.previouslyAppliedUk, a.passportImageUrl, a.personalPhotoUrl,
             a.imageConsent, a.photoConsent, feeShare, a.job || null,
           ]

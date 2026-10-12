@@ -15,6 +15,7 @@ const migrations = [
   require("./012_add_applicant_unique_id"),
   require("./013_default_status_inprogress"),
   require("./014_add_job_to_applicants"),
+  require("./015_passport_fields_optional"),
 ];
 
 const run = async () => {
