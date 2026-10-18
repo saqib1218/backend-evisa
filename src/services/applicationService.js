@@ -65,14 +65,9 @@ async function generateUniqueApplicantIds(count) {
 
 const VALID_STATUSES = ["inprogress", "pending", "accepted", "approved", "rejected"];
 
-// NOTE: nationality, passportNumber, passportIssueDate, and passportExpiryDate are intentionally
-// excluded here. The Passport, Passport image, and Your photo steps are temporarily disabled on
-// the frontend application form (see ENABLE_PASSPORT_PHOTO_STEPS in apply/page.tsx), so these
-// fields are no longer collected and will arrive empty. Re-add them here if those steps are
-// re-enabled.
 const REQUIRED_APPLICANT_FIELDS = [
   "firstName", "lastName", "email", "phone", "dateOfBirth", "gender",
-  "countryOfBirth",
+  "countryOfBirth", "nationality", "passportNumber", "passportIssueDate", "passportExpiryDate",
 ];
 
 async function validateApplicationInput({ applicants, processingType, confirmInfo, privacyNotice }) {
