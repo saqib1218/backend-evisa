@@ -16,6 +16,7 @@ const migrations = [
   require("./013_default_status_inprogress"),
   require("./014_add_job_to_applicants"),
   require("./015_passport_fields_optional"),
+  require("./016_revolut_payments"),
 ];
 
 const run = async () => {

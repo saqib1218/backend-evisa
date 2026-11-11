@@ -5,7 +5,7 @@ const morgan = require("morgan");
 const path = require("path");
 const cookieParser = require("cookie-parser");
 const config = require("./config");
-const StripeWebhookController = require("./controllers/stripeWebhookController");
+const RevolutWebhookController = require("./controllers/revolutWebhookController");
 
 const app = express();
 
@@ -17,13 +17,13 @@ app.use(
   })
 );
 
-// Stripe webhook MUST receive the raw request body for signature
+// Revolut webhook MUST receive the raw request body for signature
 // verification. This must be registered before express.json() so the
 // body is never parsed/mutated beforehand.
 app.post(
-  "/api/webhooks/stripe",
-  express.raw({ type: "application/json" }),
-  StripeWebhookController.handleWebhook
+  "/api/webhooks/revolut",
+  express.raw({ type: "*/*" }),
+  RevolutWebhookController.handleWebhook
 );
 
 app.use(express.json({ limit: "50mb" }));

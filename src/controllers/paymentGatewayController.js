@@ -1,6 +1,6 @@
 const { ApplicationService } = require("../services");
 
-const StripePaymentController = {
+const PaymentGatewayController = {
   async createCheckoutSession(req, res, next) {
     try {
       const { applicants, processingType, confirmInfo, privacyNotice } = req.body;
@@ -29,4 +29,4 @@ const StripePaymentController = {
   },
 };
 
-module.exports = StripePaymentController;
+module.exports = PaymentGatewayController;

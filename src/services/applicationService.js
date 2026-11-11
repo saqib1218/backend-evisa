@@ -5,7 +5,9 @@ const { applicationReceived, applicationStatusUpdate, adminNewApplicationNotific
 const config = require("../config");
 const pricing = require("../config/pricing");
 const NotificationService = require("./notificationService");
-const StripeService = require("./stripeService");
+const RevolutService = require("./revolutService");
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const fs = require("fs");
 const path = require("path");
 
@@ -410,13 +412,13 @@ const ApplicationService = {
    * Step 1 of the secure payment flow: validate the application data,
    * calculate the authoritative amount on the backend (never trust the
    * frontend), store the form data as a pending record, and create a
-   * Stripe Checkout Session. No `applications` row is created yet.
+   * Revolut order (hosted checkout). No `applications` row is created yet.
    */
   async createPendingApplication({ applicants, processingType, confirmInfo, privacyNotice }) {
     await validateApplicationInput({ applicants, processingType, confirmInfo, privacyNotice });
 
     const amountDetails = await pricing.calculateAmount(processingType, applicants.length);
-    const currency = config.stripe.currency;
+    const currency = config.revolut.currency;
 
     const pending = await PendingApplicationRepository.create({
       formData: { applicants, processingType, confirmInfo, privacyNotice },
@@ -426,36 +428,61 @@ const ApplicationService = {
 
     const primaryApplicant = applicants[0];
 
-    let session;
+    let order;
     try {
-      session = await StripeService.createCheckoutSession({
+      order = await RevolutService.createOrder({
         pendingApplicationId: pending.id,
         amountInSmallestUnit: amountDetails.amountInSmallestUnit,
         currency,
-        description: `${processingType} processing - ${applicants.length} applicant(s)`,
+        description: `eVisa ETA Application Fee - ${processingType} processing - ${applicants.length} applicant(s)`,
         customerEmail: primaryApplicant?.email,
       });
     } catch (err) {
-      console.error("Failed to create Stripe checkout session:", err.message);
+      console.error("Failed to create Revolut order:", err.message);
+      await PendingApplicationRepository.markStatus(pending.id, "failed");
       throw { status: 502, message: "Unable to start payment. Please try again." };
     }
 
-    await PendingApplicationRepository.attachSessionId(pending.id, session.id);
+    if (!order?.id || !order?.checkout_url) {
+      console.error("Revolut order response missing id/checkout_url");
+      await PendingApplicationRepository.markStatus(pending.id, "failed");
+      throw { status: 502, message: "Unable to start payment. Please try again." };
+    }
 
-    return { url: session.url, sessionId: session.id };
+    await PendingApplicationRepository.attachRevolutOrderId(pending.id, order.id);
+
+    return { url: order.checkout_url, sessionId: pending.id };
   },
 
   /**
-   * Used by the frontend success page. Never marks anything as paid itself —
-   * only reports the state that the webhook has already established.
+   * Used by the frontend success page. Only marks an order as paid after
+   * verifying it server-side with the Revolut API.
    */
   async getPaymentStatus(sessionId) {
     if (!sessionId) {
       throw { status: 400, message: "sessionId is required" };
     }
-    const pending = await PendingApplicationRepository.findBySessionId(sessionId);
+    let pending = UUID_REGEX.test(sessionId)
+      ? await PendingApplicationRepository.findById(sessionId)
+      : await PendingApplicationRepository.findByRevolutOrderId(sessionId);
     if (!pending) {
       throw { status: 404, message: "Payment session not found" };
+    }
+
+    // Fallback when the webhook hasn't arrived yet: verify the order
+    // server-side with Revolut and fulfil it if it has completed.
+    if (pending.status === "pending" && pending.revolut_order_id) {
+      try {
+        const order = await RevolutService.retrieveOrder(pending.revolut_order_id);
+        if (order?.state === "completed") {
+          await this.confirmRevolutPayment(order);
+        } else if (order?.state === "cancelled" || order?.state === "failed") {
+          await this.expirePendingApplication(order);
+        }
+        pending = await PendingApplicationRepository.findById(pending.id);
+      } catch (err) {
+        console.error("Failed to verify Revolut order status:", err.message);
+      }
     }
 
     if (pending.status === "completed" && pending.application_id) {
@@ -476,20 +503,14 @@ const ApplicationService = {
 
   /**
    * Core webhook handler logic — the single source of truth for marking a
-   * payment as PAID. Called only after the Stripe signature has been
-   * verified and event-level idempotency has been established by the
-   * caller (StripeWebhookEventRepository).
+   * payment as PAID. Called only after the Revolut webhook signature has been
+   * verified (or the order fetched directly from Revolut). The order passed
+   * in must always come from the Revolut API, never from an untrusted payload.
    */
-  async confirmStripePayment(session) {
-    const pendingApplicationId = session.metadata?.pendingApplicationId;
-    if (!pendingApplicationId) {
-      console.error("Stripe webhook: session missing pendingApplicationId metadata", session.id);
-      return null;
-    }
-
-    const pending = await PendingApplicationRepository.findById(pendingApplicationId);
+  async confirmRevolutPayment(order) {
+    const pending = await PendingApplicationRepository.findByRevolutOrderId(order.id);
     if (!pending) {
-      console.error("Stripe webhook: no pending application found for id", pendingApplicationId);
+      console.error("Revolut: no pending application found for order", order.id);
       return null;
     }
 
@@ -499,19 +520,19 @@ const ApplicationService = {
     }
 
     // Verify payment actually succeeded
-    if (session.payment_status !== "paid") {
-      console.warn("Stripe webhook: session not paid, status =", session.payment_status);
+    if (order.state !== "completed") {
+      console.warn("Revolut: order not completed, state =", order.state);
       return null;
     }
 
     // Verify amount + currency match what we recorded when the session was created
     const expectedAmountInSmallestUnit = Math.round(parseFloat(pending.amount) * 100);
-    if (session.amount_total !== expectedAmountInSmallestUnit) {
-      console.error("Stripe webhook: amount mismatch", { expected: expectedAmountInSmallestUnit, received: session.amount_total });
+    if (Number(order.amount) !== expectedAmountInSmallestUnit) {
+      console.error("Revolut: amount mismatch", { expected: expectedAmountInSmallestUnit, received: order.amount });
       return null;
     }
-    if ((session.currency || "").toLowerCase() !== pending.currency.toLowerCase()) {
-      console.error("Stripe webhook: currency mismatch", { expected: pending.currency, received: session.currency });
+    if ((order.currency || "").toLowerCase() !== pending.currency.toLowerCase()) {
+      console.error("Revolut: currency mismatch", { expected: pending.currency, received: order.currency });
       return null;
     }
 
@@ -561,16 +582,15 @@ const ApplicationService = {
           processingTotal: amountDetails.processingTotal,
           grandTotal: amountDetails.grandTotal,
         },
-        stripePayment: {
-          checkoutSessionId: session.id,
-          paymentIntentId: session.payment_intent || null,
+        gatewayPayment: {
+          orderId: order.id,
           currency: pending.currency,
         },
       });
     } catch (err) {
       // Roll the pending record back so it can be retried/investigated
       await PendingApplicationRepository.markStatus(pending.id, "failed");
-      console.error("Stripe webhook: failed to create application after payment", err.message);
+      console.error("Revolut: failed to create application after payment", err.message);
       throw err;
     }
 
@@ -646,10 +666,9 @@ const ApplicationService = {
     return application;
   },
 
-  async expirePendingApplication(session) {
-    const pendingApplicationId = session.metadata?.pendingApplicationId;
-    if (!pendingApplicationId) return;
-    const pending = await PendingApplicationRepository.findById(pendingApplicationId);
+  async expirePendingApplication(order) {
+    if (!order?.id) return;
+    const pending = await PendingApplicationRepository.findByRevolutOrderId(order.id);
     if (!pending || pending.status !== "pending") return;
     await PendingApplicationRepository.markStatus(pending.id, "expired");
   },

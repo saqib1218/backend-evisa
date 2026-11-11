@@ -1,12 +1,12 @@
 const db = require("../config/database");
 
 const ApplicationRepository = {
-  async create({ userId, applicantId, referenceNumber, processingType, confirmInfo, privacyNotice, applicants, payment, stripePayment }) {
+  async create({ userId, applicantId, referenceNumber, processingType, confirmInfo, privacyNotice, applicants, payment, gatewayPayment }) {
     const client = await db.pool.connect();
     try {
       await client.query("BEGIN");
 
-      const isPaid = Boolean(stripePayment);
+      const isPaid = Boolean(gatewayPayment);
 
       // 1. Insert application
       const appResult = await client.query(
@@ -46,16 +46,16 @@ const ApplicationRepository = {
         `INSERT INTO payments
           (application_id, applicant_count, processing_type, fee_per_applicant,
            processing_fee_per_applicant, fee_total, processing_total, grand_total, payment_status,
-           stripe_checkout_session_id, stripe_payment_intent_id, currency, paid_at)
+           revolut_order_id, payment_provider, currency, paid_at)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
         [
           application.id,
           payment.applicantCount, payment.processingType, payment.feePerApplicant,
           payment.processingFeePerApplicant, payment.feeTotal, payment.processingTotal,
           payment.grandTotal, isPaid,
-          stripePayment?.checkoutSessionId || null,
-          stripePayment?.paymentIntentId || null,
-          stripePayment?.currency || null,
+          gatewayPayment?.orderId || null,
+          gatewayPayment ? "revolut" : null,
+          gatewayPayment?.currency || null,
           isPaid ? new Date() : null,
         ]
       );

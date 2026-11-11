@@ -1,5 +1,5 @@
 const express = require("express");
-const { AuthController, ApplicationController, UploadController, PaymentController, NotificationController, StripePaymentController, QueryController, PackageController } = require("../controllers");
+const { AuthController, ApplicationController, UploadController, PaymentController, NotificationController, PaymentGatewayController, QueryController, PackageController } = require("../controllers");
 const { authenticateToken, requireRole, upload, documentUpload } = require("../middleware");
 
 const router = express.Router();
@@ -14,9 +14,9 @@ router.post("/auth/logout", AuthController.logout);
 // Upload routes (authenticated users)
 router.post("/upload/images", authenticateToken, upload.array("images", 10), UploadController.uploadImages);
 
-// Stripe payment routes (public — no application row exists until payment is confirmed)
-router.post("/payments/create-checkout-session", StripePaymentController.createCheckoutSession);
-router.get("/payments/status/:sessionId", StripePaymentController.getPaymentStatus);
+// Revolut payment routes (public — no application row exists until payment is confirmed)
+router.post("/payments/create-checkout-session", PaymentGatewayController.createCheckoutSession);
+router.get("/payments/status/:sessionId", PaymentGatewayController.getPaymentStatus);
 
 // Application routes (public)
 router.post("/applications/track", ApplicationController.track);

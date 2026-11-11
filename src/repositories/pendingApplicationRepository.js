@@ -11,18 +11,18 @@ const PendingApplicationRepository = {
     return result.rows[0];
   },
 
-  async attachSessionId(id, stripeCheckoutSessionId) {
+  async attachRevolutOrderId(id, revolutOrderId) {
     const result = await db.query(
-      `UPDATE pending_applications SET stripe_checkout_session_id = $1, updated_at = NOW() WHERE id = $2 RETURNING *`,
-      [stripeCheckoutSessionId, id]
+      `UPDATE pending_applications SET revolut_order_id = $1, updated_at = NOW() WHERE id = $2 RETURNING *`,
+      [revolutOrderId, id]
     );
     return result.rows[0];
   },
 
-  async findBySessionId(stripeCheckoutSessionId) {
+  async findByRevolutOrderId(revolutOrderId) {
     const result = await db.query(
-      `SELECT * FROM pending_applications WHERE stripe_checkout_session_id = $1`,
-      [stripeCheckoutSessionId]
+      `SELECT * FROM pending_applications WHERE revolut_order_id = $1`,
+      [revolutOrderId]
     );
     return result.rows[0];
   },

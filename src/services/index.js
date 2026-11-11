@@ -4,7 +4,7 @@ module.exports = {
   PaymentService: require("./paymentService"),
   EmailService: require("./emailService"),
   NotificationService: require("./notificationService"),
-  StripeService: require("./stripeService"),
+  RevolutService: require("./revolutService"),
   QueryService: require("./queryService"),
   PackageService: require("./packageService"),
 };

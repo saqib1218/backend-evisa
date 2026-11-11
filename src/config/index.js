@@ -34,10 +34,14 @@ module.exports = {
   },
   appUrl: process.env.APP_URL || "http://localhost:5000",
   frontendUrl: process.env.FRONTEND_URL || "http://localhost:3000",
-  stripe: {
-    secretKey: process.env.STRIPE_SECRET_KEY || "",
-    webhookSecret: process.env.STRIPE_WEBHOOK_SECRET || "",
-    publishableKey: process.env.STRIPE_PUBLISHABLE_KEY || "",
-    currency: (process.env.STRIPE_CURRENCY || "gbp").toLowerCase(),
+  revolut: {
+    secretKey: process.env.REVOLUT_SECRET_KEY || "",
+    webhookSigningSecret: process.env.REVOLUT_WEBHOOK_SIGNING_SECRET || "",
+    apiUrl: (process.env.REVOLUT_API_URL ||
+      (process.env.REVOLUT_ENVIRONMENT === "production"
+        ? "https://merchant.revolut.com"
+        : "https://sandbox-merchant.revolut.com")).replace(/\/+$/, ""),
+    apiVersion: process.env.REVOLUT_API_VERSION || "2024-09-01",
+    currency: (process.env.REVOLUT_CURRENCY || "gbp").toLowerCase(),
   },
 };

@@ -5,7 +5,6 @@ module.exports = {
   PaymentRepository: require("./paymentRepository"),
   NotificationRepository: require("./notificationRepository"),
   PendingApplicationRepository: require("./pendingApplicationRepository"),
-  StripeWebhookEventRepository: require("./stripeWebhookEventRepository"),
   QueryRepository: require("./queryRepository"),
   PackageRepository: require("./packageRepository"),
 };

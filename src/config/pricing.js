@@ -1,6 +1,6 @@
 // Backend-controlled pricing configuration.
 // The frontend must NEVER be trusted to supply the payment amount.
-// These values are the single source of truth for calculating Stripe charges.
+// These values are the single source of truth for calculating Revolut charges.
 // Packages are now stored in the database and managed via the admin panel.
 
 const db = require("../config/database");
@@ -63,7 +63,7 @@ async function getPackage(processingType) {
 /**
  * Calculates the authoritative payment total for a given processing type and
  * applicant count. Returns amounts in normal currency units (e.g. pounds),
- * as well as the exact figure to charge via Stripe in the smallest currency
+ * as well as the exact figure to charge via Revolut in the smallest currency
  * unit (e.g. pence).
  */
 async function calculateAmount(processingType, applicantCount) {
@@ -77,7 +77,7 @@ async function calculateAmount(processingType, applicantCount) {
   const processingTotal = Math.round(pkg.processing * count * 100) / 100;
   const grandTotal = Math.round((feeTotal + processingTotal) * 100) / 100;
 
-  // Smallest currency unit (e.g. pence for GBP) — required by Stripe
+  // Smallest currency unit (e.g. pence for GBP) — required by Revolut
   const amountInSmallestUnit = Math.round(grandTotal * 100);
 
   return {
